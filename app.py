@@ -4,6 +4,10 @@ from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceInstructEmbeddings, OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
+from langchain.memory import ConversationBufferMemory
+from langchain.chains import ConversationalRetrievalChain
+from langchain.llms import HuggingFaceHub
+from uiTemplate import css, bot_template, user_template
 
 
 def get_pdf_text(pdf_docs):
@@ -35,7 +39,20 @@ def get_vectorstore(text_chunks):
 
 
 def get_conversation_chain(vectorstore):
-    pass
+    llm = 'huggingface model'
+    memory = ConversationBufferMemory(
+        memory_key='chat_history', return_messages=True)
+    conversation_chain = ConversationalRetrievalChain.from_llm(
+        llm=llm,
+        retriever=vectorstore.as_retriever(),
+        memory=memory
+    )
+    return conversation_chain
+
+
+def handle_userinput(user_question):
+    response = st.session_state.conversation({'question': user_question})
+    st.write(response)
 
 
 def main():
@@ -43,9 +60,25 @@ def main():
     # langchain to access the api key
     load_dotenv()
 
+    if "conversation" not in st.session_state:
+        st.session_state.conversation = None
+
+    # if "chat_history" not in st.session_state:
+    #     st.session_state.conversation = None
+
     st.set_page_config(page_title="Chat with Docs", page_icon=':books:')
+
+    st.write(css, unsafe_allow_html=True)
+
     st.header("Chat with multiple PDFs :books:")
-    st.text_input("Ask a question about your documents:")
+    user_question = st.text_input("Ask a question about your documents:")
+    if user_question:
+        handle_userinput(user_question)
+
+    # st.write(user_template.replace(
+    #     "{{MSG}}", "Hello there"), unsafe_allow_html=True)
+    st.write(bot_template.replace(
+        "{{MSG}}", "Hello homosapien"), unsafe_allow_html=True)
 
     with st.sidebar:
         st.subheader("Your documents")
@@ -64,7 +97,8 @@ def main():
                 vectorstore = get_vectorstore(text_chunks)
 
                 # create conversation chain
-                conversation = get_conversation_chain(vectorstore)
+                st.session_state.conversation = get_conversation_chain(
+                    vectorstore)
 
 
 if __name__ == '__main__':
